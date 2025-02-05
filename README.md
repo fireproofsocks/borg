@@ -32,3 +32,10 @@ Enum.each(1..20, fn n -> Borg.put(n, n) end)
 # or go big!
 Enum.each(1..1000, fn n -> Borg.put(n, n) end)
 ```
+
+## See Also
+
+Some articles and references which helped me piece this together:
+
+- <https://whitfin.io/blog/setting-up-distributed-nodes-in-elixir-unit-tests/>
+- <https://stackoverflow.com/questions/67957826/what-is-the-correct-way-to-start-pgs-default-scope-in-an-elixir-1-12-applica>
