@@ -53,7 +53,7 @@ defmodule Borg do
   @doc """
   Indicates which node(s) own a the given key given the expected redundancy.
   """
-  def whereis(ring \\ Borg.Balancer.ring(), key, redundancy \\ @redundancy) do
+  def whereis(ring \\ Borg.Collective.ring(), key, redundancy \\ @redundancy) do
     HashRing.key_to_nodes(ring, key, redundancy)
   end
 
@@ -61,7 +61,7 @@ defmodule Borg do
   Prints info about the cluster and keys etc, for use in iex
   """
   def info do
-    ring = Borg.Balancer.ring()
+    ring = Borg.Collective.ring()
     nodes = HashRing.nodes(ring)
 
     rows =

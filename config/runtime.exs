@@ -19,7 +19,8 @@ config :libcluster,
       strategy: Cluster.Strategy.Gossip,
       config: [
         port: 45892,
-        broadcast_only: false
+        broadcast_only: false,
+        secret: "WE-ARE-BORG"
       ]
     ]
   ]

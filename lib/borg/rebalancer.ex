@@ -1,34 +1,17 @@
-defmodule Borg.Balancer do
+defmodule Borg.Rebalancer do
   @moduledoc """
-  Maintains state for the current hash ring of the cluster; receives messages about
-  any nodes joining or leaving the cluster and balances keys across the nodes.
-
-  See https://www.erlang.org/doc/apps/kernel/net_kernel.html#monitor_nodes/2
-  Also https://bigardone.dev/blog/2021/05/22/three-real-world-examples-of-distributed-elixir-pt-1
+  Rebalances keys across nodes.
   """
-  use GenServer
+
   require Logger
 
-  def start_link(_), do: GenServer.start_link(__MODULE__, HashRing.new(node()), name: __MODULE__)
-
   @doc """
-  Gets the current hash ring
+  To be called when a member node has left the ring; keys/values need to be shuffled/copied
+  to ensure redundancy.
   """
-  def ring do
-    GenServer.call(__MODULE__, :ring)
-  end
-
-  @impl GenServer
-  def init(ring) do
-    :net_kernel.monitor_nodes(true)
-
-    {:ok, ring}
-  end
-
-  @impl GenServer
-  def handle_info({:nodedown, dead_node}, old_ring) do
+  def down(dead_node, old_ring) do
     # A node left the cluster
-    Logger.info("Node #{dead_node} has left the cluster")
+    Logger.info("Rebalancing down; node #{dead_node} has left the cluster")
     # formerly:
     # :foo -> [:b, :c]
     # after node :c leaves the cluster:
@@ -58,9 +41,13 @@ defmodule Borg.Balancer do
     {:noreply, new_ring}
   end
 
-  def handle_info({:nodeup, new_node}, old_ring) do
+  @doc """
+  To be called when a new node joins the collective; keys/values will be re-distributed
+  across the available nodes
+  """
+  def up(new_node, old_ring) do
     # A new node joined the cluster
-    Logger.info("New Node #{new_node} added to the cluster")
+    Logger.info("Rebalancing up; new node added #{new_node}")
 
     new_ring = HashRing.add_node(old_ring, new_node)
 
@@ -90,12 +77,5 @@ defmodule Borg.Balancer do
         end)
       end
     end)
-
-    {:noreply, new_ring}
-  end
-
-  @impl GenServer
-  def handle_call(:ring, _from, ring) do
-    {:reply, ring, ring}
   end
 end

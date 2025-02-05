@@ -39,3 +39,6 @@ Some articles and references which helped me piece this together:
 
 - <https://whitfin.io/blog/setting-up-distributed-nodes-in-elixir-unit-tests/>
 - <https://stackoverflow.com/questions/67957826/what-is-the-correct-way-to-start-pgs-default-scope-in-an-elixir-1-12-applica>
+- <https://papers.vincy.dev/distributed-pubsub-in-elixir>
+- <https://learnyousomeerlang.com/distributed-otp-applications>
+- <https://hexdocs.pm/horde/readme.html>
