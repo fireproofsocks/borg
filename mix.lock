@@ -1,0 +1,13 @@
+%{
+  "cowrie": {:hex, :cowrie, "0.4.0", "4a03bd8469ed090beea7c479df074157207efba7c7d0a742ba1d2f9679ecf747", [:mix], [{:gettext, "~> 0.26.2", [hex: :gettext, repo: "hexpm", optional: false]}, {:table_rex, "~> 4.0", [hex: :table_rex, repo: "hexpm", optional: false]}], "hexpm", "20f56d38c844bc843b11170af736230047ccde10d34dde08dee5e6f88c8a09c3"},
+  "dotenvy": {:hex, :dotenvy, "1.0.0", "b55dd0446d6bce9c6ed3958c8c4ebee58d8217ed390056e916c3048c73e29720", [:mix], [], "hexpm", "5802583a03450f36322a13cfbb18f149d9430a28df3561de8927c205c43b4db6"},
+  "expo": {:hex, :expo, "1.1.0", "f7b9ed7fb5745ebe1eeedf3d6f29226c5dd52897ac67c0f8af62a07e661e5c75", [:mix], [], "hexpm", "fbadf93f4700fb44c331362177bdca9eeb8097e8b0ef525c9cc501cb9917c960"},
+  "gettext": {:hex, :gettext, "0.26.2", "5978aa7b21fada6deabf1f6341ddba50bc69c999e812211903b169799208f2a8", [:mix], [{:expo, "~> 0.5.1 or ~> 1.0", [hex: :expo, repo: "hexpm", optional: false]}], "hexpm", "aa978504bcf76511efdc22d580ba08e2279caab1066b76bb9aa81c4a1e0a32a5"},
+  "global_flags": {:hex, :global_flags, "1.0.0", "ee6b864979a1fb38d1fbc67838565644baf632212bce864adca21042df036433", [:rebar3], [], "hexpm", "85d944cecd0f8f96b20ce70b5b16ebccedfcd25e744376b131e89ce61ba93176"},
+  "jason": {:hex, :jason, "1.4.4", "b9226785a9aa77b6857ca22832cffa5d5011a667207eb2a0ad56adb5db443b8a", [:mix], [{:decimal, "~> 1.0 or ~> 2.0", [hex: :decimal, repo: "hexpm", optional: true]}], "hexpm", "c5eb0cab91f094599f94d55bc63409236a8ec69a21a67814529e8d5f6cc90b3b"},
+  "libcluster": {:hex, :libcluster, "3.5.0", "5ee4cfde4bdf32b2fef271e33ce3241e89509f4344f6c6a8d4069937484866ba", [:mix], [{:jason, "~> 1.1", [hex: :jason, repo: "hexpm", optional: false]}, {:telemetry, "~> 1.3", [hex: :telemetry, repo: "hexpm", optional: false]}], "hexpm", "ebf6561fcedd765a4cd43b4b8c04b1c87f4177b5fb3cbdfe40a780499d72f743"},
+  "libring": {:hex, :libring, "1.7.0", "4f245d2f1476cd7ed8f03740f6431acba815401e40299208c7f5c640e1883bda", [:mix], [], "hexpm", "070e3593cb572e04f2c8470dd0c119bc1817a7a0a7f88229f43cf0345268ec42"},
+  "local_cluster": {:hex, :local_cluster, "2.1.0", "1c847d69a927ef5a62db13236f93146e8a42377a9c9a5bb4cac3372cba69d683", [:mix], [{:global_flags, "~> 1.0", [hex: :global_flags, repo: "hexpm", optional: false]}], "hexpm", "dc1c3abb6fef00198dd53c855b39ea80c55b3a8059d8d9f17d50da46b1e3b858"},
+  "table_rex": {:hex, :table_rex, "4.0.0", "3c613a68ebdc6d4d1e731bc973c233500974ec3993c99fcdabb210407b90959b", [:mix], [], "hexpm", "c35c4d5612ca49ebb0344ea10387da4d2afe278387d4019e4d8111e815df8f55"},
+  "telemetry": {:hex, :telemetry, "1.3.0", "fedebbae410d715cf8e7062c96a1ef32ec22e764197f70cda73d82778d61e7a2", [:rebar3], [], "hexpm", "7015fc8919dbe63764f4b4b87a95b7c0996bd539e0d499be6ec9d7f3875b79e6"},
+}
