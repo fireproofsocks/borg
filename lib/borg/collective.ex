@@ -12,9 +12,9 @@ defmodule Borg.Collective do
   alias Borg.Rebalancer
 
   # Atom name used with calls to :pg
-  @process_group_name :borg_collective
+  # @process_group_name :borg_collective
 
-  def start_link(_), do: GenServer.start_link(__MODULE__, :undefined, name: __MODULE__)
+  def start_link(_), do: GenServer.start_link(__MODULE__, HashRing.new(), name: __MODULE__)
 
   @doc """
   Adds the given node to the collective
@@ -28,7 +28,7 @@ defmodule Borg.Collective do
   Gets a list of pids in the process group
   """
   def pids do
-    :pg.get_members(@process_group_name)
+    :pg.get_members(__MODULE__)
   end
 
   @doc """
@@ -40,163 +40,118 @@ defmodule Borg.Collective do
 
   @impl GenServer
   def init(state) do
-    :ok = :net_kernel.monitor_nodes(true)
-    # {:ok, _} = :pg.start_link()
-    :ok = :pg.join(@process_group_name, Process.whereis(__MODULE__))
-    # We have to wait a tick for the app to boot etc (?) before :pg will see
-    # see the remote pids that may be in the group.
-    Process.send_after(self(), :update_topology, 100)
-
-    # {:ok, ring, {:continue, :notify_collective}}
+    # Subscribe to nodeup/nodedown
+    # :ok = :net_kernel.monitor_nodes(true)
+    # Subscribe to join/leave events
+    :pg.monitor(__MODULE__)
+    :ok = :pg.join(__MODULE__, Process.whereis(__MODULE__))
     {:ok, state}
   end
 
-  # @impl GenServer
-  # def handle_continue(:notify_collective, state) do
-  #   # Do stuff
-  #   pids = pids()
-  #   IO.puts("Notifying the following pids in the process group: #{inspect(pids)}")
-
-  #   # Notify the other Borg of the new node
-  #   x =
-  #     Enum.each(pids, fn pid ->
-  #       Logger.debug("Telling pid #{inspect(pid)} about node #{node()}")
-  #       add_node(pid, node())
-  #     end)
-
-  #   # Then join the process group
-  #   result = :pg.join(@process_group_name, Process.whereis(__MODULE__))
-  #   dbg(result)
-  #   IO.puts("PIds after i joined the group: #{inspect(pids)}")
-  #   dbg(x)
-  #   {:noreply, state}
-  # end
-
   @doc """
-  The `{:nodedown, node}` and `{:nodeup, node}` messages are received because this
-  process subscribed to them via `:net_kernel.monitor_nodes(true)`.
+  The following info messages are handled:
 
-  `:pg.get_members/1` does not seem to include the pids registered by other nodes
-  until *after* the application has started, so we have to update the topology here
-  a little bit afterwards.
+  - `{_ref, :join, _group, new_pids}` received via `:pg.monitor/1` subscription
+  - `{_ref, :leave, _group, departing_pids}` received via `:pg.monitor/1` subscription
+
+  Note that when a node first comes up, there are multiple `:join` messages received:
+  one for each node in the cluster.  This means we have to avoid doing duplicate work.
   """
   @impl GenServer
-  def handle_info(:update_topology, _ring) do
-    # pids = :pg.get_members(@process_group_name)
-    # IO.puts("Pids after i joined the group: #{inspect(pids)}")
+  def handle_info({_ref, :join, _group, [new_pid]}, ring) do
+    Logger.debug("#{inspect(new_pid)} has joined the group")
+    # When a new node comes online, it receives a message for each of the other
+    # nodes in the cluster; e.g. if node C is turned on, it will get notified that
+    # node A has joined, then another message that node B has joined.
+    # `:pg.get_members/1` _eventually_ will return all the nodes in the cluster, but
+    # the first messages are incomplete.
+    # We need a way to "debounce" messages: we will wait a tick and compare the
+    # set of pids captured at the time of sending vs. the time of receiving
+    # new_node = node(new_pid)
+    pid_set = MapSet.new(:pg.get_members(__MODULE__))
+    Process.send_after(self(), {:update_topology, pid_set}, 100)
 
-    pids = :pg.get_members(@process_group_name)
-    IO.inspect(pids, label: "ALL MEMBERS OF PROCESS GROUP")
-    pids_other_nodes = Enum.reject(pids, fn pid -> pid == self() end)
+    # pids = :pg.get_members(__MODULE__)
+    # # IO.inspect(pids, label: "PG MEMBERSHIP after joining")
+    # Logger.debug("PG MEMBERSHIP after joining: #{inspect(pids)}")
 
-    # inherit the ring from another Borg (if available)
-    ring =
-      case pids_other_nodes do
-        [] -> HashRing.new()
-        [pid_other_node | _] -> GenServer.call(pid_other_node, :ring)
-      end
+    # # Don't try to rebalance the NEW node -- the other nodes will take care of it
+    # if new_node != node() do
+    #   # Logger.debug("New node #{new_node} is not this node (#{node()})... rebalancing...")
+    #   # :ok = Rebalancer.up(new_node, old_ring)
+    # end
 
-    # Notify OTHER nodes that this node is Borg
-    IO.puts(
-      "Notifying the following OTHER pids in the process group: #{inspect(pids_other_nodes)}"
-    )
+    # nodes = Enum.map(pids, fn pid -> node(pid) end)
 
-    Enum.each(pids_other_nodes, fn pid ->
-      Logger.debug("Telling pid #{inspect(pid)} about node #{node()}")
-      GenServer.call(pid, {:add_node, node()})
-    end)
+    # ring = HashRing.add_nodes(HashRing.new(), nodes)
 
-    # Rebalancer.up(node(), ring)
-    # # Then join the process group
-    # me = Process.whereis(__MODULE__)
-    # dbg(me)
-    # result = :pg.join(@process_group_name, Process.whereis(__MODULE__))
-    # dbg(result)
-    # pids = :pg.get_members(@process_group_name)
-    # IO.puts("Pids after i joined the group: #{inspect(pids)}")
-
-    {:noreply, HashRing.add_node(ring, node())}
-  end
-
-  def handle_info({:nodedown, dead_node}, old_ring) do
-    # A node left the cluster
-    Logger.info("Node #{dead_node} has left the cluster")
-    # Was it a Borg?
-    if Enum.member?(HashRing.nodes(old_ring), dead_node) do
-      Rebalancer.down(dead_node, old_ring)
-    end
-
-    # formerly:
-    # :foo -> [:b, :c]
-    # after node :c leaves the cluster:
-    # :foo -> [:a, :b]
-    # Borg.Storage.rebalance_down()
-    # new_ring = HashRing.remove_node(old_ring, dead_node)
-
-    # # :ok = Borg.Storage.rebalance(Borg.Storage, new_ring)
-    # # Rebalance: copy data from any key that resided on the dead node
-    # keys_this_node = Borg.Storage.keys(Borg.Storage)
-
-    # Enum.each(keys_this_node, fn key ->
-    #   old_nodes_set = old_ring |> Borg.whereis(key, 2) |> MapSet.new()
-
-    #   if MapSet.member?(old_nodes_set, dead_node) do
-    #     new_nodes_set = new_ring |> Borg.whereis(key) |> MapSet.new()
-
-    #     nodes_needing_data = MapSet.difference(new_nodes_set, old_nodes_set)
-    #     {:ok, value} = Borg.Storage.fetch(Borg.Storage, key)
-
-    #     Enum.each(nodes_needing_data, fn node ->
-    #       :ok = Borg.Storage.put({Borg.Storage, node}, key, value)
-    #     end)
-    #   end
-    # end)
-
-    {:noreply, HashRing.remove_node(old_ring, dead_node)}
-  end
-
-  def handle_info({:nodeup, new_node}, ring) do
-    # A new node joined the cluster
-    Logger.info("New Node #{new_node} added to the cluster. This node may or may not be Borg")
-    # We actually don't care if a new node joins the cluster.  If it is a Borg, it
-    # will join the collective as part of its bootstrapping.
-    # new_ring = HashRing.add_node(old_ring, new_node)
-
-    # # formerly:
-    # # :foo -> [:a, :b]
-    # # after node :c comes up:
-    # # :foo -> [:c, :b]
-    # keys_this_node = Borg.Storage.keys(Borg.Storage)
-
-    # Enum.each(keys_this_node, fn key ->
-    #   old_nodes_set = old_ring |> Borg.whereis(key) |> MapSet.new()
-    #   new_nodes_set = new_ring |> Borg.whereis(key) |> MapSet.new()
-
-    #   if !MapSet.equal?(old_nodes_set, new_nodes_set) do
-    #     {:ok, value} = Borg.Storage.fetch(Borg.Storage, key)
-
-    #     nodes_needing_data = MapSet.difference(new_nodes_set, old_nodes_set)
-
-    #     Enum.each(nodes_needing_data, fn node ->
-    #       :ok = Borg.Storage.put({Borg.Storage, node}, key, value)
-    #     end)
-
-    #     nodes_needing_pruning = MapSet.difference(old_nodes_set, new_nodes_set)
-
-    #     Enum.each(nodes_needing_pruning, fn node ->
-    #       :ok = Borg.Storage.delete({Borg.Storage, node}, key)
-    #     end)
-    #   end
-    # end)
+    # Logger.debug(":pg join pids: #{inspect(pids)}; updated ring: #{inspect(ring)}")
 
     {:noreply, ring}
   end
 
-  @impl GenServer
-  def handle_call({:add_node, node}, _from, ring) do
-    Rebalancer.up(node, ring)
-    {:reply, :ok, HashRing.add_node(ring, node)}
+  def handle_info({_ref, :leave, _group, _pids}, _ring) do
+    # Logger.debug("#{inspect(departing_pid)} has left the group")
+    # departing_nodes = Enum.map(departing_pids, fn pid -> node(pid) end)
+    # # departing_node = node(departing_pid)
+    # ring = HashRing.add_nodes(HashRing.new(), HashRing.nodes(old_ring) -- departing_nodes)
+
+    member_pids = :pg.get_members(__MODULE__)
+    ring = HashRing.add_nodes(HashRing.new(), Enum.map(member_pids, fn pid -> node(pid) end))
+
+    Logger.debug("PG MEMBERSHIP after leaving: #{inspect(ring)}")
+
+    # Logger.debug(":pg leave pids: #{inspect(departing_pids)}; updated ring: #{inspect(ring)}")
+    kv_stream = Borg.Storage.to_stream()
+    Rebalancer.redistribute(kv_stream, ring, node(), 100)
+
+    {:noreply, ring}
   end
+
+  def handle_info({:update_topology, pid_set}, ring) do
+    member_pids = :pg.get_members(__MODULE__)
+
+    if MapSet.equal?(MapSet.new(member_pids), pid_set) do
+      Logger.debug("Updating topology...")
+
+      # new_node = node(new_pid)
+      # # Don't try to rebalance the NEW node -- the other nodes will take care of it
+      # if new_node != node() do
+      #   # Logger.debug("New node #{new_node} is not this node (#{node()})... rebalancing...")
+      #   # :ok = Rebalancer.up(new_node, old_ring)
+      # end
+
+      ring = HashRing.add_nodes(HashRing.new(), Enum.map(member_pids, fn pid -> node(pid) end))
+
+      # Rebalancer.calc_redistribution(ring, node())
+      kv_stream = Borg.Storage.to_stream()
+      Rebalancer.redistribute(kv_stream, ring, node(), 100)
+
+      {:noreply, ring}
+    else
+      Logger.debug("Ignoring outdated :join message")
+      {:noreply, ring}
+    end
+
+    # A node left the cluster
+    # Logger.info("Node #{dead_node} has left the cluster")
+    # Do cleanup in
+    # {:noreply, ring}
+  end
+
+  # def handle_info({:nodedown, dead_node}, ring) do
+  #   # A node left the cluster
+  #   Logger.info("Node #{dead_node} has left the cluster")
+  #   # Do cleanup in
+  #   {:noreply, ring}
+  # end
+
+  # def handle_info({:nodeup, new_node}, ring) do
+  #   # A new node joined the cluster
+  #   Logger.info("New Node #{new_node} added to the cluster. This node may or may not be Borg")
+
+  #   {:noreply, ring}
+  # end
 
   @impl GenServer
   def handle_call(:ring, _from, ring) do

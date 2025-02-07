@@ -37,8 +37,11 @@ Enum.each(1..1000, fn n -> Borg.put(n, n) end)
 
 Some articles and references which helped me piece this together:
 
+- <https://bigardone.dev/blog/2021/06/06/three-real-world-examples-of-distributed-elixir-pt-2>
 - <https://whitfin.io/blog/setting-up-distributed-nodes-in-elixir-unit-tests/>
 - <https://stackoverflow.com/questions/67957826/what-is-the-correct-way-to-start-pgs-default-scope-in-an-elixir-1-12-applica>
 - <https://papers.vincy.dev/distributed-pubsub-in-elixir>
 - <https://learnyousomeerlang.com/distributed-otp-applications>
 - <https://hexdocs.pm/horde/readme.html>
+- <https://en.wikipedia.org/wiki/Consistent_hashing>
+- <https://www.tzeyiing.com/posts/erlang-global-resource-locks-elixir/>

@@ -1,6 +1,6 @@
 defmodule Borg do
   @moduledoc """
-  Documentation for `Borg`.
+  Public functions for accessing `Borg` stuff
   """
   require Logger
 
@@ -10,19 +10,20 @@ defmodule Borg do
   Retrieves the value at the given key or returns an error tuple. Looks for the value
   on up to #{@redundancy} nodes.
   """
-  @spec fetch(key :: term()) :: {:ok, any()} | {:error, String.t()}
-  def fetch(key) do
+  @spec get(key :: term()) :: {:ok, any()} | {:error, String.t()}
+  def get(key) do
     fail_msg = {:error, "Key #{inspect(key)} not found"}
 
     key
     |> whereis()
     |> Enum.reduce_while(fail_msg, fn node, acc ->
-      case Borg.Storage.fetch({Borg.Storage, node}, key) do
-        {:ok, value} ->
-          {:halt, {:ok, value}}
-
-        :error ->
+      # we don't have a fetch operation, so we look for `nil`s
+      case Borg.Storage.get({Borg.Storage, node}, key) do
+        nil ->
           {:cont, acc}
+
+        value ->
+          {:halt, {:ok, value}}
       end
     end)
   end
@@ -37,9 +38,10 @@ defmodule Borg do
     if length(owners) < @redundancy do
       {:error, "Write operations require at least #{@redundancy} nodes to be available."}
     else
+      Logger.debug("Writing key #{inspect(key)} to nodes #{inspect(owners)}")
+
       owners
       |> Enum.map(fn node ->
-        Logger.debug("Writing key #{inspect(key)} to node #{inspect(node)}")
         Borg.Storage.put({Borg.Storage, node}, key, value)
       end)
       |> Enum.all?(fn result -> result == :ok end)
@@ -66,7 +68,7 @@ defmodule Borg do
 
     rows =
       Enum.map(nodes, fn node ->
-        [node, length(Borg.Storage.keys({Borg.Storage, node}))]
+        [node, Borg.Storage.info({Borg.Storage, node}).size]
       end)
 
     Cowrie.table(rows, ["Node", "Key Cnt"])
@@ -75,7 +77,7 @@ defmodule Borg do
   @doc """
   Dumps local storage
   """
-  def dump do
-    Borg.Storage.state(Borg.Storage)
+  def local do
+    Borg.Storage.to_map(Borg.Storage)
   end
 end

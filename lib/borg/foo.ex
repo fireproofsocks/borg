@@ -15,6 +15,7 @@ defmodule Borg.Foo do
   def init(_) do
     Logger.debug("Initing Foo")
     state = %{}
+    # :pg.monitor(:borg_collective)
     {:ok, state}
   end
 
@@ -32,7 +33,7 @@ defmodule Borg.Foo do
     {:noreply, state}
   end
 
-  def handle_info(msg, _from, state) do
+  def handle_info(msg, state) do
     Logger.debug("Handling info on node #{node()}: #{inspect(msg)}")
     {:noreply, state}
   end

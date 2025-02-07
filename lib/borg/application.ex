@@ -16,9 +16,10 @@ defmodule Borg.Application do
          Application.fetch_env!(:libcluster, :topologies),
          [name: Borg.ClusterSupervisor]
        ]},
+      Borg.Foo,
       Borg.Collective,
-      Borg.Storage,
-      Borg.Foo
+      Borg.Storage
+
       # Borg.Notify
     ]
 
