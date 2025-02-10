@@ -33,7 +33,7 @@ defmodule Borg.MixProject do
     [
       {:dotenvy, "~> 1.0.0"},
       {:libcluster, "~> 3.5"},
-      {:libring, "~> 1.7"},
+      # {:libring, "~> 1.7"},
       {:local_cluster, "~> 2.1"},
       {:cowrie, "~> 0.4.0"},
       {:pockets, "~> 1.6.0"}

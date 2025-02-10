@@ -1,8 +1,7 @@
 defmodule Borg.Rebalancer do
   @moduledoc """
   This module is dedicated to rebalancing data across nodes.  Keys are assigned to
-  nodes using the `libring` package and its `HashRing` module, which relies on
-  the math of [Consistent Hashing](https://en.wikipedia.org/wiki/Consistent_hashing).
+  nodes the math of [Rendezvous Hashing](https://en.wikipedia.org/wiki/Rendezvous_hashing).
   """
 
   require Logger
@@ -12,13 +11,13 @@ defmodule Borg.Rebalancer do
   @doc """
   Balances then given key/value data (ideally a stream) using the given hash ring.
   """
-  def redistribute(kv_data, %HashRing{} = ring, this_node, chunk_size) do
+  def redistribute(kv_data, %MapSet{} = node_set, this_node, chunk_size) do
     Logger.info("Beginning redistribution of data on node #{this_node}; #{DateTime.utc_now()}")
     # TODO: write lock
     kv_data
     |> Stream.chunk_every(chunk_size)
     |> Stream.each(fn chunk ->
-      {data_to_copy, keys_to_delete_from_this_node} = get_allocation(chunk, ring, this_node)
+      {data_to_copy, keys_to_delete_from_this_node} = get_allocation(chunk, node_set, this_node)
       apply_allocation(data_to_copy, keys_to_delete_from_this_node)
     end)
     |> Stream.run()
@@ -78,12 +77,12 @@ defmodule Borg.Rebalancer do
   3 should be copied to node "c", and key 3 should be deleted from this node (node "a")
   because nodes "b" and "c" are determined to be the sole owners of data at that key.
   """
-  def get_allocation(data, %HashRing{} = ring, this_node) do
-    merge_map = merge_map(ring, this_node)
+  def get_allocation(data, %MapSet{} = node_set, this_node) do
+    merge_map = create_merge_map(node_set, this_node)
 
     data
     |> Enum.reduce({merge_map, []}, fn {key, value}, {merges, delete_keys} ->
-      {:ok, owners} = Borg.whereis(ring, key)
+      owners = Borg.whereis(node_set, key)
       other_owners = owners -- [this_node]
 
       merges =
@@ -104,14 +103,13 @@ defmodule Borg.Rebalancer do
     end)
   end
 
-  # Creates a map with keys for each node in the HashRing _except_ this node
+  # Creates a map with keys for each node in the collective _except_ this node
   # Values are maps.
   # This is an intermediary data structure that will eventually tell us which
   # data needs to be sent to (i.e. merged with) each node.
-  defp merge_map(%HashRing{} = ring, this_node) do
-    ring
-    |> HashRing.remove_node(this_node)
-    |> HashRing.nodes()
+  defp create_merge_map(%MapSet{} = node_set, this_node) do
+    node_set
+    |> MapSet.delete(this_node)
     |> Enum.map(fn node -> {node, %{}} end)
     |> Map.new()
   end
