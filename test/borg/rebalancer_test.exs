@@ -9,7 +9,12 @@ defmodule Borg.RebalancerTest do
     # end
   end
 
-  describe "allocate_chunk/3" do
+  describe "apply_allocation/3" do
+    test ":ok" do
+    end
+  end
+
+  describe "get_allocation/3" do
     test ":ok" do
       ring = HashRing.add_nodes(HashRing.new(), ["a", "b", "c"])
 
@@ -18,7 +23,7 @@ defmodule Borg.RebalancerTest do
       assert {%{
                 "b" => %{2 => 2, 3 => 3, 6 => 6, 10 => 10},
                 "c" => %{1 => 1, 3 => 3, 4 => 4, 5 => 5, 7 => 7, 8 => 8, 9 => 9, 10 => 10}
-              }, [10, 3]} = Rebalancer.allocate_chunk(chunk, ring, "a")
+              }, [10, 3]} = Rebalancer.get_allocation(chunk, ring, "a")
     end
   end
 end

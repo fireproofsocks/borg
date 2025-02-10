@@ -37,8 +37,6 @@ defmodule Borg.MixProject do
       {:local_cluster, "~> 2.1"},
       {:cowrie, "~> 0.4.0"},
       {:pockets, "~> 1.6.0"}
-      # {:dep_from_hexpm, "~> 0.3.0"},
-      # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
     ]
   end
 end

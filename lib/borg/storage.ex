@@ -2,10 +2,11 @@ defmodule Borg.Storage do
   @moduledoc """
   This module sets up a `GenServer` in front of an ETS table (using `Pockets` for
   an easier interface).  We aren't using a `GenServer` to maintain state, only
-  to handle messages sent from other nodes. Conceptually, the storage is basically
-  a `Map` (a key/value store), but because it uses ETS we can stream output and
-  keys, so we are less likely to blow up our memory when we have to rebalance data
-  across nodes.
+  to handle messages sent from other nodes and serialize the operations.
+
+  Conceptually, the storage is a `Map` (i.e. a key/value store), but because it
+  uses ETS we can stream output and keys, so we are less likely to blow up our
+  memory when we have to rebalance data across nodes.
 
   Storage can be accessed locally
 
@@ -14,17 +15,22 @@ defmodule Borg.Storage do
   or by other nodes if they include a more fully qualified process identifier, e.g.
 
       iex> Borg.Storage.get({Borg.Storage, :b@localhost}, :some_key)
-
-  Some functions are accessible only locally -- their pid name is hardcoded.
-  Messages are still handled by the GenServer so that incoming operations can be
-  serialized and run in the order they were received.
   """
   use GenServer
 
   require Logger
 
-  def start_link(_opts) do
-    GenServer.start_link(__MODULE__, [], name: __MODULE__)
+  @doc """
+  Starts up an instance of storage with an ETS table backing it.
+
+  ## Options
+
+  - `:name` identifies the process and the name of the underlying ETS table.
+    Name should be restricted to  often an atom.  Default: `#{__MODULE__}`
+  """
+  def start_link(opts \\ []) do
+    name = Keyword.get(opts, :name, __MODULE__)
+    GenServer.start_link(__MODULE__, name, name: name)
   end
 
   def delete(pid, key) do
@@ -32,10 +38,10 @@ defmodule Borg.Storage do
   end
 
   @doc """
-  Local access only: bulk delete
+  bulk delete
   """
-  def drop(keys) when is_list(keys) do
-    GenServer.call(__MODULE__, {:drop, keys})
+  def drop(pid, keys) when is_list(keys) do
+    GenServer.call(pid, {:drop, keys})
   end
 
   def get(pid, key) do
@@ -44,13 +50,6 @@ defmodule Borg.Storage do
 
   def info(pid) do
     GenServer.call(pid, :info)
-  end
-
-  @doc """
-  Local access only
-  """
-  def keys_stream do
-    GenServer.call(__MODULE__, :keys_stream)
   end
 
   def merge(pid, %{} = data) do
@@ -62,10 +61,10 @@ defmodule Borg.Storage do
   end
 
   @doc """
-  Local access only
+  Returns data as a stream
   """
-  def to_stream do
-    GenServer.call(__MODULE__, :to_stream)
+  def to_stream(pid) do
+    GenServer.call(pid, :to_stream)
   end
 
   @doc """
@@ -78,50 +77,46 @@ defmodule Borg.Storage do
   end
 
   @impl true
-  def init(_), do: Pockets.new(__MODULE__)
+  def init(name), do: Pockets.new(name)
 
   @impl true
-  def handle_call({:delete, key}, _from, state) do
+  def handle_call({:delete, key}, _from, name) do
     Logger.debug("Deleting key #{key} from node #{node()}.")
-    result = Pockets.delete(__MODULE__, key)
-    {:reply, result, state}
+    Pockets.delete(name, key)
+    {:reply, :ok, name}
   end
 
-  def handle_call({:drop, keys}, _from, state) do
+  def handle_call({:drop, keys}, _from, name) do
     Logger.debug("Droping #{length(keys)} keys from node #{node()}.")
     key_set = MapSet.new(keys)
     # Warning: this updates the table in place
-    result = Pockets.reject(__MODULE__, fn {k, _v} -> MapSet.member?(key_set, k) end)
-    {:reply, result, state}
+    {:ok, _keys_dropped} = Pockets.reject(name, fn {k, _v} -> MapSet.member?(key_set, k) end)
+    {:reply, :ok, name}
   end
 
-  def handle_call({:get, key}, _from, state) do
-    {:reply, Pockets.get(__MODULE__, key), state}
+  def handle_call({:get, key}, _from, name) do
+    {:reply, Pockets.get(name, key), name}
   end
 
-  def handle_call(:info, _from, state) do
-    {:reply, Pockets.info(__MODULE__), state}
+  def handle_call(:info, _from, name) do
+    {:reply, Pockets.info(name), name}
   end
 
-  def handle_call(:keys_stream, _from, state) do
-    {:reply, Pockets.keys_stream(__MODULE__), state}
+  def handle_call({:merge, data}, _from, name) do
+    Pockets.merge(name, data)
+    {:reply, :ok, name}
   end
 
-  def handle_call({:merge, data}, _from, state) do
-    Pockets.merge(__MODULE__, data)
-    {:reply, :ok, state}
+  def handle_call({:put, key, value}, _from, name) do
+    Pockets.put(name, key, value)
+    {:reply, :ok, name}
   end
 
-  def handle_call({:put, key, value}, _from, state) do
-    Pockets.put(__MODULE__, key, value)
-    {:reply, :ok, state}
+  def handle_call(:to_map, _from, name) do
+    {:reply, Pockets.to_map(name), name}
   end
 
-  def handle_call(:to_map, _from, state) do
-    {:reply, Pockets.to_map(__MODULE__), state}
-  end
-
-  def handle_call(:to_stream, _from, state) do
-    {:reply, Pockets.to_stream(__MODULE__), state}
+  def handle_call(:to_stream, _from, name) do
+    {:reply, Pockets.to_stream(name), name}
   end
 end

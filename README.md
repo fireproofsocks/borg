@@ -30,6 +30,7 @@ Enum.each(1..3, fn n -> Borg.put(n, n) end)
 Enum.each(1..10, fn n -> Borg.put(n, n) end)
 Enum.each(1..20, fn n -> Borg.put(n, n) end)
 # or go big!
+Enum.each(1..200, fn n -> Borg.put(n, n) end)
 Enum.each(1..1000, fn n -> Borg.put(n, n) end)
 ```
 
@@ -45,3 +46,7 @@ Some articles and references which helped me piece this together:
 - <https://hexdocs.pm/horde/readme.html>
 - <https://en.wikipedia.org/wiki/Consistent_hashing>
 - <https://www.tzeyiing.com/posts/erlang-global-resource-locks-elixir/>
+- <https://elixirforum.com/t/unexpected-behavior-from-libring-hashring-unlucky-number-14/69333/4>
+- <https://en.wikipedia.org/wiki/Rendezvous_hashing>
+- <https://www.usenix.org/system/files/conference/atc13/atc13-cidon.pdf>
+- <https://github.com/derekkraan/horde/issues/277>
