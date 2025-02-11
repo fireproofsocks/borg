@@ -15,7 +15,8 @@ defmodule Borg.Application do
          [name: Borg.ClusterSupervisor]
        ]},
       Borg.Collective,
-      Borg.Storage
+      Borg.Storage,
+      {DynamicSupervisor, name: Borg.DynamicSupervisor, strategy: :one_for_one}
     ]
 
     opts = [strategy: :one_for_one, name: Borg.Supervisor]

@@ -7,16 +7,7 @@ defmodule Borg.MixProject do
       version: "0.1.0",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
-      deps: deps(),
-      releases: releases()
-    ]
-  end
-
-  defp releases do
-    [
-      borg: [
-        overlays: ["envs/"]
-      ]
+      deps: deps()
     ]
   end
 
@@ -31,9 +22,7 @@ defmodule Borg.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:dotenvy, "~> 1.0.0"},
       {:libcluster, "~> 3.5"},
-      # {:libring, "~> 1.7"},
       {:local_cluster, "~> 2.1"},
       {:cowrie, "~> 0.4.0"},
       {:pockets, "~> 1.6.0"}

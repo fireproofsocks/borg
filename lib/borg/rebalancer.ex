@@ -2,27 +2,84 @@ defmodule Borg.Rebalancer do
   @moduledoc """
   This module is dedicated to rebalancing data across nodes.  Keys are assigned to
   nodes the math of [Rendezvous Hashing](https://en.wikipedia.org/wiki/Rendezvous_hashing).
+
+  To start:
+
+      DynamicSupervisor.start_child(Borg.DynamicSupervisor, {Borg.Rebalancer, []})
+
+  To stop:
+
+    DynamicSupervisor.terminate_child(Borg.DynamicSupervisor, pid)
   """
+
+  use GenServer
 
   require Logger
 
   alias Borg.Storage
 
   @doc """
+  Is the rebalancer process running on this node?
+  """
+  def alive?(pid \\ __MODULE__) do
+    case GenServer.whereis(pid) do
+      nil -> false
+      _ -> true
+    end
+  end
+
+  @doc """
+  Accumulate the given keys for later deletion.
+  """
+  def acc_keys_for_deletion(pid \\ __MODULE__, keys) do
+    GenServer.call(pid, {:acc_keys_for_deletion, keys})
+  end
+
+  @doc """
+  Delete accumulated keys.
+  """
+  def delete_keys(pid \\ __MODULE__) do
+    GenServer.call(pid, :delete_keys)
+  end
+
+  # called indirectly by `DynamicSupervisor.start_child/2`
+  def start_link(opts \\ []) do
+    name = Keyword.get(opts, :name, __MODULE__)
+    GenServer.start_link(__MODULE__, MapSet.new(), name: name)
+  end
+
+  @impl GenServer
+  def init(state) do
+    {:ok, state}
+  end
+
+  @impl GenServer
+  def handle_call({:acc_keys_for_deletion, keys}, _from, state) do
+    {:reply, :ok, MapSet.union(state, MapSet.new(keys))}
+  end
+
+  def handle_call(:delete_keys, _from, state) do
+    result = Storage.drop(Storage, MapSet.to_list(state))
+    {:reply, result, MapSet.new()}
+  end
+
+  @doc """
   Balances then given key/value data (ideally a stream) using the given hash ring.
   """
   def redistribute(kv_data, %MapSet{} = node_set, this_node, chunk_size) do
     Logger.info("Beginning redistribution of data on node #{this_node}; #{DateTime.utc_now()}")
-    # TODO: write lock
+
     kv_data
     |> Stream.chunk_every(chunk_size)
     |> Stream.each(fn chunk ->
       {data_to_copy, keys_to_delete_from_this_node} = get_allocation(chunk, node_set, this_node)
-      apply_allocation(data_to_copy, keys_to_delete_from_this_node)
+      apply_allocation(data_to_copy)
+      acc_keys_for_deletion(keys_to_delete_from_this_node)
     end)
     |> Stream.run()
 
-    # TODO: release write lock
+    delete_keys()
+
     Logger.info("Completing redistribution on node #{this_node}; #{DateTime.utc_now()}")
   end
 
@@ -30,13 +87,15 @@ defmodule Borg.Rebalancer do
   Takes the data produced from `get_allocation/3` and applies it by dispatching
   operations to storage.
   """
-  def apply_allocation(data_to_copy, keys_to_delete_from_this_node) do
-    Enum.each(data_to_copy, fn {target_node, data} ->
-      Logger.debug("Copying data from #{node()} to #{target_node}: #{inspect(data)}")
-      :ok = Storage.merge({Storage, target_node}, data)
-    end)
-
-    Storage.drop(Storage, keys_to_delete_from_this_node)
+  # def apply_allocation(data_to_copy, _keys_to_delete_from_this_node) do
+  def apply_allocation(data_to_copy) do
+    data_to_copy
+    |> Enum.map(fn {target_node, data} -> Storage.merge({Storage, target_node}, data) end)
+    |> Enum.all?(fn result -> result == :ok end)
+    |> case do
+      true -> :ok
+      false -> Logger.error("Error merging to one or more nodes")
+    end
   end
 
   @doc """
@@ -76,6 +135,8 @@ defmodule Borg.Rebalancer do
   From this we can see that keys 1 and 3 should be copied to node "b", keys 2 and
   3 should be copied to node "c", and key 3 should be deleted from this node (node "a")
   because nodes "b" and "c" are determined to be the sole owners of data at that key.
+
+  TODO: refactor more along the lines of Enum.group_by/3
   """
   def get_allocation(data, %MapSet{} = node_set, this_node) do
     merge_map = create_merge_map(node_set, this_node)

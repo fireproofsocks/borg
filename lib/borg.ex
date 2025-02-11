@@ -58,7 +58,7 @@ defmodule Borg do
   end
 
   @doc """
-  Indicates which node(s) own a the given key given the expected redundancy.
+  Returns the node(s) which own the given key given the expected redundancy.
   """
   @spec whereis(node_set :: MapSet.t(), key :: term(), redundancy :: non_neg_integer()) :: list()
   def whereis(node_set \\ Borg.Collective.members(), key, redundancy \\ @redundancy) do
@@ -84,6 +84,7 @@ defmodule Borg do
 
   @doc """
   Prints info about the cluster and keys etc, for use in iex
+  TODO: use `multi_call/4` instead? https://hexdocs.pm/elixir/GenServer.html#multi_call/4
   """
   def info do
     nodes = Collective.members()

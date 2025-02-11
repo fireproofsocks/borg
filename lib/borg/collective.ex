@@ -23,7 +23,7 @@ defmodule Borg.Collective do
     # Subscribe to join/leave events
     :pg.monitor(__MODULE__)
     :ok = :pg.join(__MODULE__, Process.whereis(__MODULE__))
-    {:ok, MapSet.put(node_set, node())}
+    {:ok, node_set}
   end
 
   @doc """
@@ -52,40 +52,54 @@ defmodule Borg.Collective do
     {:noreply, node_set}
   end
 
-  def handle_info({_ref, :leave, _group, _pids}, node_set) do
+  def handle_info({_ref, :leave, _group, _pids}, prev_node_set) do
     member_pids = :pg.get_members(__MODULE__)
-    node_set = Enum.reduce(member_pids, node_set, fn pid, acc -> MapSet.put(acc, node(pid)) end)
 
-    Logger.debug("PG MEMBERSHIP after leaving: #{inspect(node_set)}")
+    updated_node_set =
+      Enum.reduce(member_pids, MapSet.new(), fn pid, acc -> MapSet.put(acc, node(pid)) end)
 
-    # TODO: balance down
-    # kv_stream = Storage.to_stream(Storage)
-    # Rebalancer.redistribute(kv_stream, node_set, node(), 100)
+    removed_nodes = MapSet.difference(prev_node_set, updated_node_set)
 
-    {:noreply, node_set}
+    Logger.debug(
+      "Updating topology: #{inspect(updated_node_set)}; removed node(s): #{inspect(removed_nodes)}"
+    )
+
+    if !Rebalancer.alive?() && MapSet.size(removed_nodes) > 0 do
+      {:ok, pid} = DynamicSupervisor.start_child(Borg.DynamicSupervisor, {Borg.Rebalancer, []})
+
+      kv_stream = Storage.to_stream(Storage)
+      Rebalancer.redistribute(kv_stream, updated_node_set, node(), 100)
+      DynamicSupervisor.terminate_child(Borg.DynamicSupervisor, pid)
+    end
+
+    {:noreply, updated_node_set}
   end
 
-  def handle_info({:update_topology, pid_set}, old_node_set) do
+  def handle_info({:update_topology, pid_set}, prev_node_set) do
     member_pids = :pg.get_members(__MODULE__)
 
     if MapSet.equal?(MapSet.new(member_pids), pid_set) do
-      new_ring_set =
+      updated_node_set =
         Enum.reduce(member_pids, MapSet.new(), fn pid, acc -> MapSet.put(acc, node(pid)) end)
 
-      added_nodes = MapSet.difference(new_ring_set, old_node_set)
+      added_nodes = MapSet.difference(updated_node_set, prev_node_set)
 
       Logger.debug(
-        "Updating topology to new ring: #{inspect(new_ring_set)}; added node(s): #{inspect(added_nodes)}"
+        "Updating topology: #{inspect(updated_node_set)}; added node(s): #{inspect(added_nodes)}"
       )
 
-      # TODO: spawn new process
-      # kv_stream = Storage.to_stream(Storage)
-      # Rebalancer.redistribute(kv_stream, new_ring_set, node(), 100)
+      if !Rebalancer.alive?() && MapSet.size(added_nodes) > 0 do
+        {:ok, pid} = DynamicSupervisor.start_child(Borg.DynamicSupervisor, {Borg.Rebalancer, []})
 
-      {:noreply, new_ring_set}
+        kv_stream = Storage.to_stream(Storage)
+        Rebalancer.redistribute(kv_stream, updated_node_set, node(), 100)
+        DynamicSupervisor.terminate_child(Borg.DynamicSupervisor, pid)
+      end
+
+      {:noreply, updated_node_set}
     else
       Logger.debug("Ignoring outdated :join message")
-      {:noreply, old_node_set}
+      {:noreply, prev_node_set}
     end
   end
 

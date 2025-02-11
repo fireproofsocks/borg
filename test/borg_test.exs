@@ -23,7 +23,7 @@ defmodule BorgTest do
   end
 
   describe "put/2" do
-    test ":ok", %{test: test} do
+    test ":ok", %{test: _test} do
       # {:ok, _pid} = LocalCluster.start_link(3, prefix: "#{test}")
       {:ok, pid} = LocalCluster.start_link(3, prefix: "test-put-")
       Process.sleep(150)
@@ -37,18 +37,10 @@ defmodule BorgTest do
   end
 
   describe "whereis/3" do
-    test ":error when ring has no nodes" do
-      assert {:error, _} = Borg.whereis(%HashRing{}, "key")
-    end
+    test "returns the proper number" do
+      node_set = MapSet.new(["a", "b", "c"])
 
-    test ":ok" do
-      ring =
-        HashRing.new()
-        |> HashRing.add_node("a")
-        |> HashRing.add_node("b")
-        |> HashRing.add_node("c")
-
-      assert {:ok, [_node1, _node2]} = Borg.whereis(ring, "key", 2)
+      assert [_node1, _node2] = Borg.whereis(node_set, "key", 2)
     end
   end
 end
