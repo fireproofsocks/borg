@@ -2,6 +2,8 @@ defmodule Borg do
   @moduledoc """
   Welcome to `Borg`! This is a proof-of-concept application that demonstrates some
   of the functions and techniques for working with distributed Elixir applications.
+  There is no master: every instance of this application is a peer.
+  See the README for examples of how to kick the tires.
   """
   alias Borg.Collective
   alias Borg.Storage
@@ -59,6 +61,7 @@ defmodule Borg do
 
   @doc """
   Returns the node(s) which own the given key given the expected redundancy.
+  The results are ordered.
   """
   @spec whereis(node_set :: MapSet.t(), key :: term(), redundancy :: non_neg_integer()) :: list()
   def whereis(node_set \\ Borg.Collective.members(), key, redundancy \\ @redundancy) do
@@ -66,32 +69,19 @@ defmodule Borg do
     node_set
     |> Enum.sort_by(fn n -> {:erlang.phash2({key, n}), n} end)
     |> Enum.take(redundancy)
-
-    # case HashRing.key_to_nodes(ring, key, redundancy) do
-    #   {:error, error} ->
-    #     {:error, error}
-
-    #   nodes ->
-    #     # Workaround for weird behavior.
-    #     # https://elixirforum.com/t/unexpected-behavior-from-libring-hashring-unlucky-number-14/69333
-    #     if length(nodes) < redundancy do
-    #       {:ok, Enum.take(HashRing.nodes(ring), redundancy)}
-    #     else
-    #       {:ok, nodes}
-    #     end
-    # end
   end
 
   @doc """
   Prints info about the cluster and keys etc, for use in iex
-  TODO: use `multi_call/4` instead? https://hexdocs.pm/elixir/GenServer.html#multi_call/4
   """
   def info do
-    nodes = Collective.members()
+    # https://hexdocs.pm/elixir/GenServer.html#multi_call/4
+    {replies, _bad_nodes} =
+      GenServer.multi_call(MapSet.to_list(Collective.members()), Storage, :info)
 
     rows =
-      Enum.map(nodes, fn node ->
-        [node, Storage.info({Storage, node}).size]
+      Enum.map(replies, fn {node, info_struct} ->
+        [node, info_struct.size]
       end)
 
     Cowrie.table(rows, ["Node", "Key Cnt"])

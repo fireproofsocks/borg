@@ -75,6 +75,12 @@ defmodule Borg.Rebalancer do
       {data_to_copy, keys_to_delete_from_this_node} = get_allocation(chunk, node_set, this_node)
       apply_allocation(data_to_copy)
       acc_keys_for_deletion(keys_to_delete_from_this_node)
+
+      # Enum.map(chunk, fn {key, value} -> {key, value, Borg.whereis(node_set, key)} end)
+      # Enum.flat_map([{:x, "xray", [:a, :b]}, {:y, "yellow", [:a, :c]}], fn {key, val, owners} -> Enum.reduce(owners, [], fn owner, acc -> [ {owner, key, val} | acc] end) end)
+      # [{:b, :x, "xray"}, {:a, :x, "xray"}, {:c, :y, "yellow"}, {:a, :y, "yellow"}]
+      # Enum.group_by(z, fn {dest, _, _} -> dest end, fn {_, k, v} -> {k, v} end)
+      # %{c: [y: "yellow"], a: [x: "xray", y: "yellow"], b: [x: "xray"]}
     end)
     |> Stream.run()
 
