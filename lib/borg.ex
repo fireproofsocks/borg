@@ -40,6 +40,7 @@ defmodule Borg do
   """
   @spec put(key :: term(), value :: any()) :: :ok | {:error, String.t()}
   def put(key, value) do
+    # TODO: block writes if rebalancing is taking place
     owners = whereis(key)
 
     if length(owners) < @redundancy do
@@ -47,6 +48,7 @@ defmodule Borg do
     else
       Logger.debug("Writing key #{inspect(key)} to nodes #{inspect(owners)}")
 
+      # TODO: use `GenServer.multi_call/4`
       owners
       |> Enum.map(fn node ->
         Storage.put({Storage, node}, key, value)
@@ -72,19 +74,16 @@ defmodule Borg do
   end
 
   @doc """
-  Prints info about the cluster and keys etc, for use in iex
+  Returns info about the cluster and key distribution
   """
   def info do
     # https://hexdocs.pm/elixir/GenServer.html#multi_call/4
     {replies, _bad_nodes} =
       GenServer.multi_call(MapSet.to_list(Collective.members()), Storage, :info)
 
-    rows =
-      Enum.map(replies, fn {node, info_struct} ->
-        [node, info_struct.size]
-      end)
-
-    Cowrie.table(rows, ["Node", "Key Cnt"])
+    Enum.map(replies, fn {node, info_struct} ->
+      %{node: node, key_count: info_struct.size}
+    end)
   end
 
   @doc """

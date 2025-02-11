@@ -68,7 +68,7 @@ defmodule Borg.Collective do
       {:ok, pid} = DynamicSupervisor.start_child(Borg.DynamicSupervisor, {Borg.Rebalancer, []})
 
       kv_stream = Storage.to_stream(Storage)
-      Rebalancer.redistribute(kv_stream, updated_node_set, node(), 100)
+      Rebalancer.redistribute(kv_stream, updated_node_set, node(), 1000)
       DynamicSupervisor.terminate_child(Borg.DynamicSupervisor, pid)
     end
 
@@ -92,7 +92,7 @@ defmodule Borg.Collective do
         {:ok, pid} = DynamicSupervisor.start_child(Borg.DynamicSupervisor, {Borg.Rebalancer, []})
 
         kv_stream = Storage.to_stream(Storage)
-        Rebalancer.redistribute(kv_stream, updated_node_set, node(), 100)
+        Rebalancer.redistribute(kv_stream, updated_node_set, node(), 1000)
         DynamicSupervisor.terminate_child(Borg.DynamicSupervisor, pid)
       end
 

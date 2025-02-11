@@ -23,8 +23,8 @@ defmodule Borg.MixProject do
   defp deps do
     [
       {:libcluster, "~> 3.5"},
-      {:local_cluster, "~> 2.1"},
-      {:cowrie, "~> 0.4.0"},
+      {:local_cluster, "~> 2.1", only: :test},
+      # {:cowrie, "~> 0.4.0"},
       {:pockets, "~> 1.6.0"}
     ]
   end

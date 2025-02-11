@@ -4,6 +4,8 @@ A simple app designed to explore some of the possibilities available to distribu
 
 This app implements a simple key/value store (think `Map`), but it does it in a distributed way so that data is distributed across all nodes in cluster and data is always written to **two nodes**.  The cluster should maintain integrity if any single node goes down because data must always exist in two places.
 
+All members of the cluster are peers: there is no leader.  There should be no single point of failure.
+
 Likewise, data is rebalanced when a new node is detected in the cluster.
 
 To see this in action, you should start up multiple instances of this application.  You must specify a short name via the `--sname` option.  For example, open 2 separate terminal tabs and start an instance of the app in each:
@@ -28,13 +30,11 @@ You should see some debug messages indicating that the value was written to 2 di
 
 ```elixir
 iex> Borg.info()
-+-------------+---------+
-| Node        | Key Cnt |
-+-------------+---------+
-| c@localhost | 675     |
-| a@localhost | 657     |
-| b@localhost | 668     |
-+-------------+---------+
+[
+  %{node: :c@localhost, key_count: 675},
+  %{node: :a@localhost, key_count: 657},
+  %{node: :b@localhost, key_count: 668}
+]
 ```
 
 If you now add another node, data should be rebalanced so it is distributed _somewhat_ evenly across the nodes.
@@ -43,6 +43,14 @@ If you now add another node, data should be rebalanced so it is distributed _som
 iex --sname c@localhost -S mix
 iex --sname d@localhost -S mix
 ```
+
+## Benchmarking
+
+Writing is a little slow. For example, writing 1 million keys via `Enum.each(1..1000000, fn n -> Borg.put(n, n) end)` might take a minute or two.
+
+However, rebalancing is relatively fast.  Adding a 3rd node to a cluster of 2 nodes containing a million keys took about 3 seconds on an M1 Mac with 10 cores.
+
+Some efficiency could be gained by leveraging `GenServer.multi_call/4` inside `Borg.put/2`...
 
 ## See Also
 

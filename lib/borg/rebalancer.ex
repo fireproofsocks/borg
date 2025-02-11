@@ -67,7 +67,8 @@ defmodule Borg.Rebalancer do
   Balances then given key/value data (ideally a stream) using the given hash ring.
   """
   def redistribute(kv_data, %MapSet{} = node_set, this_node, chunk_size) do
-    Logger.info("Beginning redistribution of data on node #{this_node}; #{DateTime.utc_now()}")
+    start_time = DateTime.utc_now()
+    Logger.info("Beginning redistribution of data on node #{this_node}; #{start_time}")
 
     kv_data
     |> Stream.chunk_every(chunk_size)
@@ -86,7 +87,12 @@ defmodule Borg.Rebalancer do
 
     delete_keys()
 
-    Logger.info("Completing redistribution on node #{this_node}; #{DateTime.utc_now()}")
+    end_time = DateTime.utc_now()
+    elapsed_ms = DateTime.diff(end_time, start_time, :millisecond)
+
+    Logger.info(
+      "Completing redistribution on node #{this_node}; #{end_time} (#{elapsed_ms}ms elapsed)"
+    )
   end
 
   @doc """
