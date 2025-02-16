@@ -24,7 +24,6 @@ defmodule Borg.MixProject do
     [
       {:libcluster, "~> 3.5"},
       {:local_cluster, "~> 2.1", only: :test},
-      # {:cowrie, "~> 0.4.0"},
       {:pockets, "~> 1.6.0"}
     ]
   end

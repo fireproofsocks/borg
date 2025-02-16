@@ -22,7 +22,7 @@ defmodule Borg.Collective do
   def init(node_set) do
     # Subscribe to join/leave events
     :pg.monitor(__MODULE__)
-    :ok = :pg.join(__MODULE__, Process.whereis(__MODULE__))
+    :ok = :pg.join(__MODULE__, self())
     {:ok, node_set}
   end
 
@@ -37,7 +37,7 @@ defmodule Borg.Collective do
   one for each node in the cluster.  This means we have to avoid doing duplicate work.
   """
   @impl GenServer
-  def handle_info({_ref, :join, _group, [_new_pid]}, node_set) do
+  def handle_info({_ref, :join, _group, _new_pids}, node_set) do
     # When a new node comes online, it receives a message for each of the other
     # nodes in the cluster; e.g. if node C is turned on, it will get notified that
     # node A has joined, then another message that node B has joined.

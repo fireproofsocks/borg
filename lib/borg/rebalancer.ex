@@ -2,6 +2,9 @@ defmodule Borg.Rebalancer do
   @moduledoc """
   This module is dedicated to rebalancing data across nodes.  Keys are assigned to
   nodes the math of [Rendezvous Hashing](https://en.wikipedia.org/wiki/Rendezvous_hashing).
+  This functionality is implemented as a GenServer so we can tell if a node is
+  in the process of being rebalanced (i.e. just check to see if the process is alive).
+  The state of the GenServer is the list of keys which are to be deleted from this node.
 
   To start:
 
@@ -77,14 +80,18 @@ defmodule Borg.Rebalancer do
       apply_allocation(data_to_copy)
       acc_keys_for_deletion(keys_to_delete_from_this_node)
 
+      # First append the owners (i.e. the nodes) to each key/value tuple:
       # Enum.map(chunk, fn {key, value} -> {key, value, Borg.whereis(node_set, key)} end)
+      # Then, reshape the input so there is one tuple for each owner
       # Enum.flat_map([{:x, "xray", [:a, :b]}, {:y, "yellow", [:a, :c]}], fn {key, val, owners} -> Enum.reduce(owners, [], fn owner, acc -> [ {owner, key, val} | acc] end) end)
       # [{:b, :x, "xray"}, {:a, :x, "xray"}, {:c, :y, "yellow"}, {:a, :y, "yellow"}]
+      # then group by owner node
       # Enum.group_by(z, fn {dest, _, _} -> dest end, fn {_, k, v} -> {k, v} end)
       # %{c: [y: "yellow"], a: [x: "xray", y: "yellow"], b: [x: "xray"]}
     end)
     |> Stream.run()
 
+    # only do this AFTER all the copy operations have finished
     delete_keys()
 
     end_time = DateTime.utc_now()
