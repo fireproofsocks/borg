@@ -87,7 +87,7 @@ defmodule Borg.Storage do
   end
 
   def handle_call({:drop, keys}, _from, name) do
-    Logger.debug("Droping #{length(keys)} keys from node #{node()}.")
+    Logger.debug("Dropping #{length(keys)} keys from node #{node()}. #{inspect(keys)}")
     key_set = MapSet.new(keys)
     # Warning: this updates the table in place
     {:ok, _keys_dropped} = Pockets.reject(name, fn {k, _v} -> MapSet.member?(key_set, k) end)

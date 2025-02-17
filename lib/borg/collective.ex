@@ -7,7 +7,6 @@ defmodule Borg.Collective do
   require Logger
 
   alias Borg.Rebalancer
-  alias Borg.Storage
 
   def start_link(_), do: GenServer.start_link(__MODULE__, MapSet.new(), name: __MODULE__)
 
@@ -67,8 +66,7 @@ defmodule Borg.Collective do
     if !Rebalancer.alive?() && MapSet.size(removed_nodes) > 0 do
       {:ok, pid} = DynamicSupervisor.start_child(Borg.DynamicSupervisor, {Borg.Rebalancer, []})
 
-      kv_stream = Storage.to_stream(Storage)
-      Rebalancer.redistribute(kv_stream, updated_node_set, node(), 1000)
+      Rebalancer.redistribute(updated_node_set, node(), 1000)
       DynamicSupervisor.terminate_child(Borg.DynamicSupervisor, pid)
     end
 
@@ -91,8 +89,7 @@ defmodule Borg.Collective do
       if !Rebalancer.alive?() && MapSet.size(added_nodes) > 0 do
         {:ok, pid} = DynamicSupervisor.start_child(Borg.DynamicSupervisor, {Borg.Rebalancer, []})
 
-        kv_stream = Storage.to_stream(Storage)
-        Rebalancer.redistribute(kv_stream, updated_node_set, node(), 1000)
+        Rebalancer.redistribute(updated_node_set, node(), 1000)
         DynamicSupervisor.terminate_child(Borg.DynamicSupervisor, pid)
       end
 
