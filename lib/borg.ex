@@ -15,9 +15,11 @@ defmodule Borg do
   @doc """
   Retrieves the value at the given key or returns an error tuple. Looks for the value
   on up to #{@redundancy} nodes.
+  FYI: although our Storage implementation is a get (with optional default), here
+  we implement a fetch operation with an :ok|:error tuple returned
   """
-  @spec get(key :: term()) :: {:ok, any()} | {:error, String.t()}
-  def get(key) do
+  @spec fetch(key :: term()) :: {:ok, any()} | {:error, String.t()}
+  def fetch(key) do
     fail_msg = {:error, "Key #{inspect(key)} not found"}
 
     key
@@ -32,45 +34,6 @@ defmodule Borg do
           {:halt, {:ok, value}}
       end
     end)
-  end
-
-  @doc """
-  Puts the key/value into storage on one or more of the other nodes in the cluster
-  so data exists on #{@redundancy} nodes.
-  """
-  @spec put(key :: term(), value :: any()) :: :ok | {:error, String.t()}
-  def put(key, value) do
-    # TODO: block writes if rebalancing is taking place
-    owners = whereis(key)
-
-    if length(owners) < @redundancy do
-      {:error, "Write operations require at least #{@redundancy} nodes to be available."}
-    else
-      Logger.debug("Writing key #{inspect(key)} to nodes #{inspect(owners)}")
-
-      # TODO: use `GenServer.multi_call/4`
-      owners
-      |> Enum.map(fn node ->
-        Storage.put({Storage, node}, key, value)
-      end)
-      |> Enum.all?(fn result -> result == :ok end)
-      |> case do
-        true -> :ok
-        false -> {:error, "Error writing to one or more nodes"}
-      end
-    end
-  end
-
-  @doc """
-  Returns the node(s) which own the given key given the expected redundancy.
-  The results are ordered.
-  """
-  @spec whereis(node_set :: MapSet.t(), key :: term(), redundancy :: non_neg_integer()) :: list()
-  def whereis(node_set \\ Borg.Collective.members(), key, redundancy \\ @redundancy) do
-    # See https://elixirforum.com/t/unexpected-behavior-from-libring-hashring-unlucky-number-14/69333/6
-    node_set
-    |> Enum.sort_by(fn n -> {:erlang.phash2({key, n}), n} end)
-    |> Enum.take(redundancy)
   end
 
   @doc """
@@ -91,5 +54,63 @@ defmodule Borg do
   """
   def local do
     Storage.to_map(Storage)
+  end
+
+  @doc """
+  Puts the key/value into storage on one or more of the other nodes in the cluster
+  so data exists on #{@redundancy} nodes.
+  """
+  @spec put(key :: term(), value :: any()) :: :ok | {:error, String.t()}
+  def put(key, value) do
+    with {:ok, target_nodes} <- get_target_nodes(key),
+         :ok <- ensure_safe_to_write(target_nodes) do
+      multi_put(target_nodes, key, value)
+    end
+  end
+
+  # Enforces redundancy rule
+  defp get_target_nodes(key) do
+    nodes = whereis(key)
+
+    if length(nodes) >= @redundancy do
+      {:ok, nodes}
+    else
+      {:error, "Write operations require at least #{@redundancy} nodes to be available."}
+    end
+  end
+
+  # there isn't an easy way to see if remote processes are running
+  # See note https://hexdocs.pm/elixir/Process.html#alive?/1
+  defp ensure_safe_to_write(nodes) do
+    nodes
+    |> Enum.all?(fn node -> :erpc.call(node, Process, :whereis, [Borg.Rebalancer]) == nil end)
+    |> case do
+      true -> :ok
+      false -> {:error, "One or more nodes is rebalancing data. Try again later"}
+    end
+  end
+
+  defp multi_put(nodes, key, value) do
+    Logger.debug("Writing key #{inspect(key)} to nodes #{inspect(nodes)}")
+    {replies, _bad_nodes} = GenServer.multi_call(nodes, Storage, {:put, key, value})
+
+    replies
+    |> Enum.all?(fn {_node, response} -> response == :ok end)
+    |> case do
+      true -> :ok
+      false -> {:error, "Error writing to one or more nodes"}
+    end
+  end
+
+  @doc """
+  Returns the node(s) which own the given key given the expected redundancy.
+  The results are ordered.
+  """
+  @spec whereis(node_set :: MapSet.t(), key :: term(), redundancy :: non_neg_integer()) :: list()
+  def whereis(node_set \\ Borg.Collective.members(), key, redundancy \\ @redundancy) do
+    # See https://elixirforum.com/t/unexpected-behavior-from-libring-hashring-unlucky-number-14/69333/6
+    node_set
+    |> Enum.sort_by(fn n -> {:erlang.phash2({key, n}), n} end)
+    |> Enum.take(redundancy)
   end
 end

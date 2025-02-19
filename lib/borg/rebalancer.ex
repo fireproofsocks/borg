@@ -23,9 +23,10 @@ defmodule Borg.Rebalancer do
 
   @doc """
   Is the rebalancer process running on this node?
+  WARNING: this doesn't really work for GenServers running on other nodes.
   """
-  def alive?(pid \\ __MODULE__) do
-    case GenServer.whereis(pid) do
+  def alive? do
+    case GenServer.whereis(__MODULE__) do
       nil -> false
       _ -> true
     end
